@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcp-switch"
+version = "1.0.0"
+description = "Fast, cross-platform, multi-client MCP profile switcher and manager"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "MCP Switcher Contributors"}
+]
+keywords = ["mcp", "model-context-protocol", "claude", "cursor", "gemini", "opencode", "llm"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Environment :: Console",
+    "Topic :: Utilities"
+]
+
+[project.scripts]
+mcp-switch = "mcp_switch:main"

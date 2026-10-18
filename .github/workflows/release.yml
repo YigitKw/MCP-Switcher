@@ -1,0 +1,38 @@
+name: Release Binaries
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            artifact_name: mcp-switch-windows.exe
+            asset_name: mcp-switch-windows-x64.exe
+          - os: macos-latest
+            artifact_name: mcp-switch
+            asset_name: mcp-switch-macos-universal
+          - os: ubuntu-latest
+            artifact_name: mcp-switch
+            asset_name: mcp-switch-linux-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+      - name: Build Binary
+        run: pyinstaller --onefile --name mcp-switch mcp_switch.py
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/${{ matrix.artifact_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
