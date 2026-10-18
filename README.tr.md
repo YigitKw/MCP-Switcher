@@ -97,9 +97,11 @@ mcp-switch <profil_adi>         # Belirtilen profili aktif eder (ör. mcp-switch
 mcp-switch status               # Aktif profili, istemcileri ve komut sağlık durumunu gösterir
 mcp-switch list                 # Tanımlı tüm profilleri listeler
 mcp-switch targets              # Senkronizasyona dahil edilecek istemcileri seçer
-mcp-switch lang [tr|en|es|...]  # Görüntüleme dilini ayarlar
+mcp-switch lang [tr|en]         # Görüntüleme dilini ayarlar
 mcp-switch add                  # Yeni bir MCP sunucu tanımı ekler
 mcp-switch edit                 # Profil oluşturur veya mevcut profilleri düzenler
+mcp-switch delete-profile <p>   # Bir profili siler
+mcp-switch remove-server <s>    # Sunucuyu kütüphaneden ve tüm profillerden siler
 ```
 
 ## Lisans

@@ -4,6 +4,7 @@ import json
 import shutil
 import re
 import time
+import shlex
 import subprocess
 from pathlib import Path
 from datetime import datetime
@@ -11,7 +12,8 @@ from datetime import datetime
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-CONFIG_DIR = Path.home() / ".gemini" / "config"
+BASE_DIR = Path(os.environ.get("MCP_SWITCH_HOME", Path.home()))
+CONFIG_DIR = BASE_DIR / ".gemini" / "config"
 PROFILES_DIR = CONFIG_DIR / "profiles"
 ACTIVE_CONFIG = CONFIG_DIR / "mcp_config.json"
 CURRENT_PROFILE_FILE = CONFIG_DIR / "current_profile.txt"
@@ -48,25 +50,34 @@ TEXTS = {
         "lib_title": "--- MCP LIBRARY ---",
         "add_title": "--- ADD NEW MCP SERVER ---",
         "edit_title": "--- EDIT / CREATE PROFILE ---",
+        "delete_p_title": "--- DELETE PROFILE ---",
+        "remove_s_title": "--- REMOVE SERVER FROM LIBRARY ---",
         "targets_title": "--- CLIENT SYNC SETTINGS ---",
         "menu_title": "MCP SWITCHER",
         "menu_1": "1. Switch Profile",
         "menu_2": "2. Add New MCP Server",
         "menu_3": "3. Edit / Create Profile",
-        "menu_4": "4. Manage Target Clients (Claude, Cursor, OpenCode, Codex, Gemini)",
-        "menu_5": "5. View Status and Health Check",
-        "menu_6": "6. List All Servers in Library",
-        "menu_7": "7. Change Language",
-        "menu_8": "8. Exit",
+        "menu_4": "4. Delete a Profile",
+        "menu_5": "5. Remove Server from Library",
+        "menu_6": "6. Manage Target Clients (Claude, Cursor, OpenCode, Codex, Gemini)",
+        "menu_7": "7. View Status and Health Check",
+        "menu_8": "8. List All Servers in Library",
+        "menu_9": "9. Change Language",
+        "menu_10": "10. Exit",
         "choice": "Your choice",
         "prompt_profile_name": "Target profile number or name",
-        "prompt_select_servers": "Enter server numbers comma-separated (e.g. 1,3) or 'all'",
+        "prompt_select_servers": "Enter server numbers comma-separated (e.g. 1,3), 'all', or press Enter to keep current",
         "saved": "Saved successfully",
+        "deleted": "Deleted successfully",
+        "aborted": "Operation cancelled",
         "ask_activate": "Do you want to activate this profile now? (y/n)",
         "ask_assign": "Do you want to assign this server to a profile now? (y/n)",
+        "ask_confirm_delete": "Are you sure you want to delete? (y/n)",
         "cmd_warn_add": "Warning: Command is not found in PATH. Continue anyway? (y/n)",
         "auto_imported": "Auto-imported existing configuration into profile",
         "non_interactive_help": "Non-interactive mode detected. Use 'mcp-switch --help' for usage.",
+        "paste_json_prompt": "Paste JSON configuration (press Enter on empty line or EOF to finish):",
+        "cannot_merge_corrupt": "Cannot merge configuration: existing client file contains invalid JSON. Overwrite aborted to prevent data loss.",
     },
     "tr": {
         "ok": "[OK]",
@@ -90,277 +101,34 @@ TEXTS = {
         "lib_title": "--- MCP GENEL KUTUPHANE ---",
         "add_title": "--- YENI MCP SUNUCUSU EKLE ---",
         "edit_title": "--- PROFIL DUZENLE / OLUSTUR ---",
+        "delete_p_title": "--- PROFIL SIL ---",
+        "remove_s_title": "--- KUTUPHANEDEN SUNUCU SIL ---",
         "targets_title": "--- ISTEMCI SENKRONIZASYON AYARLARI ---",
         "menu_title": "MCP SWITCHER",
         "menu_1": "1. Profil Degistir",
         "menu_2": "2. Yeni MCP Sunucusu Ekle",
         "menu_3": "3. Profil Duzenle / Olustur",
-        "menu_4": "4. Hedef Istemcileri Yonet (Claude, Cursor, OpenCode, Codex, Gemini)",
-        "menu_5": "5. Durum ve Saglik Raporu",
-        "menu_6": "6. Tum Sunucu Kutuphanesini Listele",
-        "menu_7": "7. Dil Degistir",
-        "menu_8": "8. Cikis",
+        "menu_4": "4. Profil Sil",
+        "menu_5": "5. Kutuphaneden Sunucu Sil",
+        "menu_6": "6. Hedef Istemcileri Yonet (Claude, Cursor, OpenCode, Codex, Gemini)",
+        "menu_7": "7. Durum ve Saglik Raporu",
+        "menu_8": "8. Tum Sunucu Kutuphanesini Listele",
+        "menu_9": "9. Dil Degistir",
+        "menu_10": "10. Cikis",
         "choice": "Seciminiz",
         "prompt_profile_name": "Gecmek istediginiz profil numarasi veya adi",
-        "prompt_select_servers": "Aktif olmasini istediginiz numaralari virgul ile girin (orn: 1,3) veya 'all'",
+        "prompt_select_servers": "Aktif olmasini istediginiz numaralari virgul ile girin (orn: 1,3), 'all' yazin veya korumak icin Enter'a basin",
         "saved": "Basariyla kaydedildi",
+        "deleted": "Basariyla silindi",
+        "aborted": "Islem iptal edildi",
         "ask_activate": "Bu profili simdi aktif etmek ister misiniz? (e/h)",
         "ask_assign": "Bu sunucuyu bir profile simdi eklemek ister misiniz? (e/h)",
+        "ask_confirm_delete": "Silmek istediginize emin misiniz? (e/h)",
         "cmd_warn_add": "Uyari: Komut PATH'te bulunamadi. Yine de devam edilsin mi? (e/h)",
         "auto_imported": "Mevcut konfigurasyon profile otomatik aktarildi",
         "non_interactive_help": "Etkilesimsiz ortam algilandi. Kullanim icin 'mcp-switch --help'.",
-    },
-    "es": {
-        "ok": "[OK]",
-        "err": "[ERROR]",
-        "warn": "[AVISO]",
-        "sync": "[SINC]",
-        "profile_active": "Perfil activado",
-        "total_servers": "Servidores totales",
-        "tools": "Herramientas",
-        "none": "Ninguno",
-        "empty": "Vacio",
-        "active": "[ACTIVO]",
-        "installed": "Instalado",
-        "not_found": "No encontrado",
-        "cmd_missing": "Comando no encontrado en PATH o disco",
-        "cmd_ready": "Ejecutable encontrado",
-        "docker_not_running": "Docker instalado pero el servicio no responde",
-        "profiles_title": "--- PERFILES DISPONIBLES ---",
-        "status_title": "--- ESTADO MCP ACTIVO ---",
-        "sync_clients": "Clientes Sincronizados",
-        "lib_title": "--- BIBLIOTECA MCP ---",
-        "add_title": "--- ANADIR SERVIDOR MCP ---",
-        "edit_title": "--- EDITAR / CREAR PERFIL ---",
-        "targets_title": "--- CLIENTES OBJETIVO ---",
-        "menu_title": "MCP SWITCHER",
-        "menu_1": "1. Cambiar Perfil",
-        "menu_2": "2. Anadir Servidor MCP",
-        "menu_3": "3. Editar / Crear Perfil",
-        "menu_4": "4. Gestionar Clientes (Claude, Cursor, OpenCode, Codex, Gemini)",
-        "menu_5": "5. Ver Estado y Diagnostico",
-        "menu_6": "6. Listar Biblioteca",
-        "menu_7": "7. Cambiar Idioma",
-        "menu_8": "8. Salir",
-        "choice": "Su eleccion",
-        "prompt_profile_name": "Numero o nombre del perfil",
-        "prompt_select_servers": "Numeros separados por coma (ej: 1,3) o 'all'",
-        "saved": "Guardado exitosamente",
-        "ask_activate": "Desea activar este perfil ahora? (s/n)",
-        "ask_assign": "Desea asignar a un perfil ahora? (s/n)",
-        "cmd_warn_add": "Aviso: Comando no encontrado. Continuar? (s/n)",
-        "auto_imported": "Configuracion existente importada al perfil",
-        "non_interactive_help": "Modo no interactivo. Use 'mcp-switch --help'.",
-    },
-    "zh": {
-        "ok": "[OK]",
-        "err": "[错误]",
-        "warn": "[警告]",
-        "sync": "[同步]",
-        "profile_active": "配置文件已激活",
-        "total_servers": "服务器总数",
-        "tools": "工具",
-        "none": "无",
-        "empty": "空",
-        "active": "[活动]",
-        "installed": "已安装",
-        "not_found": "未找到",
-        "cmd_missing": "在PATH或磁盘中未找到命令",
-        "cmd_ready": "找到可执行文件",
-        "docker_not_running": "Docker已安装但守护程序未运行",
-        "profiles_title": "--- 可用配置文件 ---",
-        "status_title": "--- 活动 MCP 状态 ---",
-        "sync_clients": "已同步客户端",
-        "lib_title": "--- MCP 库 ---",
-        "add_title": "--- 添加新 MCP 服务器 ---",
-        "edit_title": "--- 编辑 / 创建配置文件 ---",
-        "targets_title": "--- 客户端同步设置 ---",
-        "menu_title": "MCP SWITCHER",
-        "menu_1": "1. 切换配置文件",
-        "menu_2": "2. 添加新 MCP 服务器",
-        "menu_3": "3. 编辑 / 创建配置文件",
-        "menu_4": "4. 管理目标客户端 (Claude, Cursor, OpenCode, Codex, Gemini)",
-        "menu_5": "5. 查看状态与诊断",
-        "menu_6": "6. 列出库中所有服务器",
-        "menu_7": "7. 更改语言",
-        "menu_8": "8. 退出",
-        "choice": "您的选择",
-        "prompt_profile_name": "目标配置文件编号或名称",
-        "prompt_select_servers": "输入逗号分隔的服务器编号 (如 1,3) 或 'all'",
-        "saved": "保存成功",
-        "ask_activate": "是否立即激活此配置文件? (y/n)",
-        "ask_assign": "是否立即分配到配置文件? (y/n)",
-        "cmd_warn_add": "警告: 未在PATH中找到命令。仍要继续吗? (y/n)",
-        "auto_imported": "已将现有配置自动导入到配置文件",
-        "non_interactive_help": "检测到非交互模式。使用 'mcp-switch --help' 查看用法。",
-    },
-    "ru": {
-        "ok": "[OK]",
-        "err": "[OSHIBKA]",
-        "warn": "[VNIMANIE]",
-        "sync": "[SINKH]",
-        "profile_active": "Profil aktivirovan",
-        "total_servers": "Vsego serverov",
-        "tools": "Instrumenty",
-        "none": "Net",
-        "empty": "Pusto",
-        "active": "[AKTIVEN]",
-        "installed": "Ustanovlen",
-        "not_found": "Ne nayden",
-        "cmd_missing": "Komanda ne naydena v PATH ili na diske",
-        "cmd_ready": "Fayl nayden",
-        "docker_not_running": "Docker ustanovlen, no sluzhba ne zapushchena",
-        "profiles_title": "--- DOSTUPNYE PROFILI ---",
-        "status_title": "--- STATUS MCP ---",
-        "sync_clients": "Sinkhronizirovannye klienty",
-        "lib_title": "--- BIBLIOTEKA MCP ---",
-        "add_title": "--- DOBAVIT SERVER MCP ---",
-        "edit_title": "--- REDAKTIROVAT / SOZDAT PROFIL ---",
-        "targets_title": "--- NASTROYKI KLIENTOV ---",
-        "menu_title": "MCP SWITCHER",
-        "menu_1": "1. Pereklyuchit profil",
-        "menu_2": "2. Dobavit novyy MCP server",
-        "menu_3": "3. Redaktirovat / Sozdat profil",
-        "menu_4": "4. Upravlenie klientami (Claude, Cursor, OpenCode, Codex, Gemini)",
-        "menu_5": "5. Proverit status i zdorove",
-        "menu_6": "6. Spisok vseh serverov",
-        "menu_7": "7. Izmenit yazyk",
-        "menu_8": "8. Vyhod",
-        "choice": "Vash vybor",
-        "prompt_profile_name": "Nomer ili imya profilya",
-        "prompt_select_servers": "Nomera cherez zapyatuyu (napr. 1,3) ili 'all'",
-        "saved": "Uspeshno sohraneno",
-        "ask_activate": "Aktivirovat etot profil seychas? (y/n)",
-        "ask_assign": "Naznachit v profil seychas? (y/n)",
-        "cmd_warn_add": "Vnimanie: Komanda ne naydena v PATH. Prodolzhit? (y/n)",
-        "auto_imported": "Sushchestvuyushchaya konfiguratsiya importirovana v profil",
-        "non_interactive_help": "Neinteraktivnyy rezhim. Ispolzuyte 'mcp-switch --help'.",
-    },
-    "de": {
-        "ok": "[OK]",
-        "err": "[FEHLER]",
-        "warn": "[WARNUNG]",
-        "sync": "[SYNC]",
-        "profile_active": "Profil aktiviert",
-        "total_servers": "Server insgesamt",
-        "tools": "Tools",
-        "none": "Keine",
-        "empty": "Leer",
-        "active": "[AKTIV]",
-        "installed": "Installiert",
-        "not_found": "Nicht gefunden",
-        "cmd_missing": "Befehl nicht im PATH oder auf Festplatte gefunden",
-        "cmd_ready": "Ausfuehrbare Datei gefunden",
-        "docker_not_running": "Docker vorhanden, aber Dienst laeuft nicht",
-        "profiles_title": "--- VERFUEGBARE PROFILE ---",
-        "status_title": "--- AKTIVER MCP STATUS ---",
-        "sync_clients": "Synchronisierte Clients",
-        "lib_title": "--- MCP BIBLIOTHEK ---",
-        "add_title": "--- NEUEN MCP SERVER HINZUFUEGEN ---",
-        "edit_title": "--- PROFIL BEARBEITEN / ERSTELLEN ---",
-        "targets_title": "--- CLIENT SYNCHRONISATION ---",
-        "menu_title": "MCP SWITCHER",
-        "menu_1": "1. Profil wechseln",
-        "menu_2": "2. Neuen MCP Server hinzufuegen",
-        "menu_3": "3. Profil bearbeiten / erstellen",
-        "menu_4": "4. Clients verwalten (Claude, Cursor, OpenCode, Codex, Gemini)",
-        "menu_5": "5. Status und Diagnose anzeigen",
-        "menu_6": "6. Alle Server auflisten",
-        "menu_7": "7. Sprache aendern",
-        "menu_8": "8. Beenden",
-        "choice": "Ihre Wahl",
-        "prompt_profile_name": "Profilnummer oder Name",
-        "prompt_select_servers": "Servernummern mit Komma getrennt (z.B. 1,3) oder 'all'",
-        "saved": "Erfolgreich gespeichert",
-        "ask_activate": "Dieses Profil jetzt aktivieren? (j/n)",
-        "ask_assign": "Jetzt einem Profil zuweisen? (j/n)",
-        "cmd_warn_add": "Warnung: Befehl nicht im PATH gefunden. Trotzdem fortfahren? (j/n)",
-        "auto_imported": "Bestehende Konfiguration in Profil importiert",
-        "non_interactive_help": "Nicht-interaktiver Modus. Verwenden Sie 'mcp-switch --help'.",
-    },
-    "fr": {
-        "ok": "[OK]",
-        "err": "[ERREUR]",
-        "warn": "[ATTENTION]",
-        "sync": "[SYNC]",
-        "profile_active": "Profil active",
-        "total_servers": "Total serveurs",
-        "tools": "Outils",
-        "none": "Aucun",
-        "empty": "Vide",
-        "active": "[ACTIF]",
-        "installed": "Installe",
-        "not_found": "Non trouve",
-        "cmd_missing": "Commande introuvable dans PATH ou disque",
-        "cmd_ready": "Executable trouve",
-        "docker_not_running": "Docker est installe mais le service ne repond pas",
-        "profiles_title": "--- PROFILS DISPONIBLES ---",
-        "status_title": "--- STATUT MCP ACTIF ---",
-        "sync_clients": "Clients synchronises",
-        "lib_title": "--- BIBLIOTHEQUE MCP ---",
-        "add_title": "--- AJOUTER SERVEUR MCP ---",
-        "edit_title": "--- MODIFIER / CREER PROFIL ---",
-        "targets_title": "--- CLIENTS CIBLES ---",
-        "menu_title": "MCP SWITCHER",
-        "menu_1": "1. Changer de profil",
-        "menu_2": "2. Ajouter un serveur MCP",
-        "menu_3": "3. Modifier / Creer un profil",
-        "menu_4": "4. Gerer les clients (Claude, Cursor, OpenCode, Codex, Gemini)",
-        "menu_5": "5. Voir le statut et diagnostics",
-        "menu_6": "6. Lister la bibliotheque",
-        "menu_7": "7. Changer de langue",
-        "menu_8": "8. Quitter",
-        "choice": "Votre choix",
-        "prompt_profile_name": "Numero ou nom du profil",
-        "prompt_select_servers": "Numeros separes par virgule (ex: 1,3) ou 'all'",
-        "saved": "Enregistre avec succes",
-        "ask_activate": "Activer ce profil maintenant? (o/n)",
-        "ask_assign": "Assigner a un profil maintenant? (o/n)",
-        "cmd_warn_add": "Attention: Commande introuvable dans PATH. Continuer quand meme? (o/n)",
-        "auto_imported": "Configuration existante importee dans le profil",
-        "non_interactive_help": "Mode non interactif. Utilisez 'mcp-switch --help'.",
-    },
-    "ar": {
-        "ok": "[OK]",
-        "err": "[KHATA]",
-        "warn": "[TAHDHIR]",
-        "sync": "[TADAMUN]",
-        "profile_active": "Tamma taf'il al-milaf",
-        "total_servers": "Ijmali al-khawadim",
-        "tools": "Al-adawat",
-        "none": "La yujad",
-        "empty": "Farigh",
-        "active": "[NASHIT]",
-        "installed": "Muthabbat",
-        "not_found": "Ghayr mawjud",
-        "cmd_missing": "Al-amr ghayr mawjud fi PATH aw al-qurs",
-        "cmd_ready": "Al-milaf al-tanfidhi mawjud",
-        "docker_not_running": "Docker muthabbat lakin al-khidma la ta'mal",
-        "profiles_title": "--- AL-MILAFAT AL-MUTAHAT ---",
-        "status_title": "--- HALAT MCP AL-HALIYA ---",
-        "sync_clients": "Al-umala al-mutadaminun",
-        "lib_title": "--- MAKTABAT MCP ---",
-        "add_title": "--- IDAFAT KHADIM MCP JADID ---",
-        "edit_title": "--- TA'DIL / INSHA MILAF ---",
-        "targets_title": "--- I'DADAT AL-TADAMUN ---",
-        "menu_title": "MCP SWITCHER",
-        "menu_1": "1. Taghyir al-milaf",
-        "menu_2": "2. Idafat khadim MCP jadid",
-        "menu_3": "3. Ta'dil / Insha milaf",
-        "menu_4": "4. Idarat al-umala (Claude, Cursor, OpenCode, Codex, Gemini)",
-        "menu_5": "5. 'Ard al-hala wa al-fahs",
-        "menu_6": "6. Qaimat jami' al-khawadim",
-        "menu_7": "7. Taghyir al-lugha",
-        "menu_8": "8. Khuruj",
-        "choice": "Ikhtiyaruka",
-        "prompt_profile_name": "Raqm aw ism al-milaf",
-        "prompt_select_servers": "Arqam mafsula bifasila (mithl: 1,3) aw 'all'",
-        "saved": "Tamma al-hifz binajah",
-        "ask_activate": "Hal turid taf'il al-milaf al-an? (y/n)",
-        "ask_assign": "Hal turid ta'yin al-khadim li milaf al-an? (y/n)",
-        "cmd_warn_add": "Tahdhir: Al-amr ghayr mawjud. Al-istimrar? (y/n)",
-        "auto_imported": "Tamma istirad al-i'dadat al-haliya ila al-milaf",
-        "non_interactive_help": "Wad' ghayr tafa'uli. Istakhdim 'mcp-switch --help'.",
+        "paste_json_prompt": "JSON yapilandirmasini yapistirin (bitirmek icin bos satirda Enter'a basin):",
+        "cannot_merge_corrupt": "Birlestirme yapilamadi: istemci dosyasi bozuk JSON iceriyor. Veri kaybi olmamasi icin islem durduruldu.",
     }
 }
 
@@ -373,9 +141,8 @@ def get_current_lang():
         except OSError:
             pass
     system_lang = os.environ.get("LANG", "").lower()
-    for code in ("tr", "es", "zh", "ru", "de", "fr", "ar"):
-        if code in system_lang:
-            return code
+    if "tr" in system_lang:
+        return "tr"
     return "en"
 
 def set_lang(lang_code):
@@ -431,9 +198,10 @@ def probe_docker_daemon(docker_path):
         return False, f"{t('docker_not_running')} ({docker_path})"
 
 def get_client_registry():
-    home = Path.home()
+    home = Path(os.environ.get("MCP_SWITCH_HOME", Path.home()))
     if sys.platform == "win32":
-        appdata = Path(os.environ.get("APPDATA", home / "AppData" / "Roaming"))
+        appdata_base = os.environ.get("MCP_SWITCH_APPDATA")
+        appdata = Path(appdata_base) if appdata_base else Path(os.environ.get("APPDATA", home / "AppData" / "Roaming"))
         claude_path = appdata / "Claude" / "claude_desktop_config.json"
     elif sys.platform == "darwin":
         claude_path = home / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
@@ -474,6 +242,11 @@ def write_json_file(path, data):
             tmp_path = path.with_suffix(f".tmp_{os.getpid()}_{attempt}")
             with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
+            if sys.platform != "win32":
+                try:
+                    os.chmod(str(tmp_path), 0o600)
+                except OSError:
+                    pass
             if sys.platform == "win32" and path.exists():
                 try:
                     os.replace(str(tmp_path), str(path))
@@ -481,6 +254,11 @@ def write_json_file(path, data):
                     shutil.move(str(tmp_path), str(path))
             else:
                 shutil.move(str(tmp_path), str(path))
+            if sys.platform != "win32":
+                try:
+                    os.chmod(str(path), 0o600)
+                except OSError:
+                    pass
             return True, None
         except PermissionError:
             time.sleep(0.1)
@@ -492,10 +270,15 @@ def write_json_file(path, data):
 
 def merge_and_save_client_config(client_path, target_data):
     servers = target_data.get("mcpServers", {})
-    existing_data, err = read_json_file(client_path)
-    if isinstance(existing_data, dict):
-        merged = dict(existing_data)
-        merged["mcpServers"] = servers
+    if client_path.exists():
+        existing_data, err = read_json_file(client_path)
+        if err:
+            return False, f"{t('cannot_merge_corrupt')} ({err})"
+        if isinstance(existing_data, dict):
+            merged = dict(existing_data)
+            merged["mcpServers"] = servers
+        else:
+            merged = {"mcpServers": servers}
     else:
         merged = {"mcpServers": servers}
     return write_json_file(client_path, merged)
@@ -563,7 +346,6 @@ def auto_bootstrap_initial_setup():
         write_json_file(initial_profile, {"mcpServers": initial_servers})
         write_json_file(LIBRARY_FILE, {"mcpServers": initial_servers})
         CURRENT_PROFILE_FILE.write_text("default", encoding="utf-8")
-        print(f"{t('ok')} {t('auto_imported')}: 'default' ({len(initial_servers)} {t('tools')})")
 
 def get_all_servers_from_library():
     lib_data, err = read_json_file(LIBRARY_FILE)
@@ -747,15 +529,21 @@ def add_server_interactive():
             proceed = input(f"{t('cmd_warn_add')} ").strip().lower()
             if proceed not in ("y", "e", "s", "ja", "oui"):
                 return
-        raw_args = input("Args (space separated): ").strip()
-        args = raw_args.split() if raw_args else []
+        raw_args = input("Args (supports quotes for paths with spaces): ").strip()
+        if raw_args:
+            try:
+                args = shlex.split(raw_args, posix=(sys.platform != "win32"))
+            except ValueError:
+                args = raw_args.split()
+        else:
+            args = []
         env_input = input("Env vars (KEY=VAL separated by comma): ").strip()
         env = {}
         if env_input:
             for item in env_input.split(","):
                 if "=" in item:
                     k, v = item.split("=", 1)
-                    env[k.strip()] = v.strip()
+                    env[k.strip()] = str(v.strip())
         server_data = {"command": cmd, "args": args}
         if env:
             server_data["env"] = env
@@ -765,8 +553,24 @@ def add_server_interactive():
         if not server_name:
             print(f"{t('err')} 1: Invalid server name.")
             return
-        print("Paste JSON in a single line:")
-        raw_json = input().strip()
+        print(t("paste_json_prompt"))
+        lines = []
+        while True:
+            try:
+                line = input()
+            except EOFError:
+                break
+            if not line.strip() and lines:
+                break
+            lines.append(line)
+            joined = "\n".join(lines).strip()
+            if joined.startswith("{") and joined.endswith("}"):
+                try:
+                    json.loads(joined)
+                    break
+                except json.JSONDecodeError:
+                    pass
+        raw_json = "\n".join(lines).strip()
         try:
             parsed = json.loads(raw_json)
             server_data = parsed.get(server_name, parsed)
@@ -803,7 +607,8 @@ def manage_profiles_interactive(preselect_server=None):
     if not p_choice.isdigit():
         return
     p_num = int(p_choice)
-    if p_num == len(profiles) + 1:
+    is_new = (p_num == len(profiles) + 1)
+    if is_new:
         raw_name = input("New profile name: ").strip().lower()
         profile_name = sanitize_name(raw_name)
         if not profile_name:
@@ -826,10 +631,15 @@ def manage_profiles_interactive(preselect_server=None):
         print(f"{idx}. {active} {s_name}{note}")
     print(f"{t('prompt_select_servers')}:")
     selection = input("> ").strip().lower()
-    new_mcp = {}
-    if selection == "all":
+    if not selection:
+        if is_new:
+            print(f"{t('warn')} {t('aborted')}")
+            return
+        new_mcp = selected_servers
+    elif selection == "all":
         new_mcp = lib
-    elif selection:
+    else:
+        new_mcp = {}
         for part in selection.split(","):
             part = part.strip()
             if part.isdigit():
@@ -847,17 +657,77 @@ def manage_profiles_interactive(preselect_server=None):
     if activate in ("y", "e", "s", "ja", "oui"):
         switch_profile(profile_name)
 
+def delete_profile_interactive(name=None):
+    if not name:
+        profiles = sorted([p for p in PROFILES_DIR.glob("*.json") if p.name not in ("library.json", "active_targets.json")])
+        if not profiles:
+            print(f"\n{t('warn')} {t('none')}")
+            return
+        print(f"\n{t('delete_p_title')}")
+        for idx, p in enumerate(profiles, 1):
+            print(f"{idx}. {p.stem}")
+        c = input(f"{t('choice')} (1-{len(profiles)}): ").strip()
+        if c.isdigit() and 1 <= int(c) <= len(profiles):
+            target_file = profiles[int(c) - 1]
+        else:
+            print(t("aborted"))
+            return
+    else:
+        clean = sanitize_name(name)
+        target_file = PROFILES_DIR / f"{clean}.json"
+        if not target_file.exists():
+            print(f"{t('err')} 1: Profile '{name}' not found.", file=sys.stderr)
+            return EXIT_NOT_FOUND
+    confirm = input(f"'{target_file.stem}': {t('ask_confirm_delete')} ").strip().lower()
+    if confirm in ("y", "e", "s", "ja", "oui"):
+        target_file.unlink(missing_ok=True)
+        print(f"{t('ok')} {t('deleted')}: {target_file.stem}")
+        return EXIT_OK
+    print(t("aborted"))
+    return EXIT_OK
+
+def remove_server_interactive(name=None):
+    lib = get_all_servers_from_library()
+    if not lib:
+        print(f"\n{t('warn')} {t('empty')}")
+        return
+    if not name:
+        print(f"\n{t('remove_s_title')}")
+        s_keys = list(lib.keys())
+        for idx, k in enumerate(s_keys, 1):
+            print(f"{idx}. {k}")
+        c = input(f"{t('choice')} (1-{len(s_keys)}): ").strip()
+        if c.isdigit() and 1 <= int(c) <= len(s_keys):
+            target_name = s_keys[int(c) - 1]
+        else:
+            print(t("aborted"))
+            return
+    else:
+        target_name = name.strip()
+        if target_name not in lib:
+            print(f"{t('err')} 1: Server '{target_name}' not in library.", file=sys.stderr)
+            return EXIT_NOT_FOUND
+    confirm = input(f"'{target_name}': {t('ask_confirm_delete')} ").strip().lower()
+    if confirm in ("y", "e", "s", "ja", "oui"):
+        del lib[target_name]
+        write_json_file(LIBRARY_FILE, {"mcpServers": lib})
+        for p in PROFILES_DIR.glob("*.json"):
+            if p.name in ("library.json", "active_targets.json"):
+                continue
+            p_data, err = read_json_file(p)
+            if isinstance(p_data, dict) and "mcpServers" in p_data and target_name in p_data["mcpServers"]:
+                del p_data["mcpServers"][target_name]
+                write_json_file(p, p_data)
+        print(f"{t('ok')} {t('deleted')}: '{target_name}'")
+        return EXIT_OK
+    print(t("aborted"))
+    return EXIT_OK
+
 def change_language_interactive():
-    print("\n--- SELECT LANGUAGE / SELECCIONAR IDIOMA / SPRACHE WAEHLEN ---")
+    print("\n--- SELECT LANGUAGE / DIL SECIN ---")
     langs = [
         ("en", "English"),
         ("tr", "Turkce"),
-        ("es", "Espanol"),
-        ("zh", "Zhongwen (Simplified Chinese)"),
-        ("ru", "Russkiy"),
-        ("de", "Deutsch"),
-        ("fr", "Francais"),
-        ("ar", "Al-Arabiyya"),
     ]
     for idx, (code, label) in enumerate(langs, 1):
         print(f"{idx}. {label} ({code})")
@@ -885,8 +755,10 @@ def interactive_menu():
         print(t("menu_6"))
         print(t("menu_7"))
         print(t("menu_8"))
+        print(t("menu_9"))
+        print(t("menu_10"))
         try:
-            choice = input(f"\n{t('choice')} (1-8): ").strip()
+            choice = input(f"\n{t('choice')} (1-10): ").strip()
         except (EOFError, KeyboardInterrupt):
             print(f"\n{t('non_interactive_help')}")
             return
@@ -907,10 +779,14 @@ def interactive_menu():
         elif choice == "3":
             manage_profiles_interactive()
         elif choice == "4":
-            manage_targets_interactive()
+            delete_profile_interactive()
         elif choice == "5":
-            show_status()
+            remove_server_interactive()
         elif choice == "6":
+            manage_targets_interactive()
+        elif choice == "7":
+            show_status()
+        elif choice == "8":
             lib = get_all_servers_from_library()
             print(f"\n{t('lib_title')}")
             for k, v in lib.items():
@@ -921,9 +797,9 @@ def interactive_menu():
             if not lib:
                 print(t("empty"))
             print()
-        elif choice == "7":
+        elif choice == "9":
             change_language_interactive()
-        elif choice in ("8", "q", "exit"):
+        elif choice in ("10", "q", "exit"):
             break
 
 def main():
@@ -953,6 +829,14 @@ def main():
     elif cmd in ("edit", "-e", "--edit"):
         manage_profiles_interactive()
         return EXIT_OK
+    elif cmd in ("delete-profile", "remove-profile"):
+        if len(sys.argv) >= 3:
+            return delete_profile_interactive(sys.argv[2])
+        return delete_profile_interactive()
+    elif cmd in ("remove-server", "delete-server"):
+        if len(sys.argv) >= 3:
+            return remove_server_interactive(sys.argv[2])
+        return remove_server_interactive()
     elif cmd in ("help", "-h", "--help"):
         print("Usage:")
         print("  mcp-switch                     : Interactive menu")
@@ -960,9 +844,11 @@ def main():
         print("  mcp-switch list                : List profiles")
         print("  mcp-switch status              : Show active status & health check")
         print("  mcp-switch targets             : Manage target clients")
-        print("  mcp-switch lang [en|tr|es|...] : Set language")
+        print("  mcp-switch lang [en|tr]        : Set language")
         print("  mcp-switch add                 : Add new server")
         print("  mcp-switch edit                : Edit/create profile")
+        print("  mcp-switch delete-profile <p>  : Delete a profile")
+        print("  mcp-switch remove-server <s>   : Remove server from library and profiles")
         return EXIT_OK
     else:
         return switch_profile(cmd)

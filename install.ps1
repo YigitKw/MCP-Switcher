@@ -12,8 +12,14 @@ Write-Host "[*] Downloading mcp-switch for Windows..."
 Invoke-WebRequest -Uri $url -OutFile $target
 
 $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-if ($userPath -notlike "*$installDir*") {
-    [Environment]::SetEnvironmentVariable("Path", "$userPath;$installDir", "User")
+$currentPaths = @()
+if ($userPath) {
+    $currentPaths = ($userPath -split ';') | Where-Object { $_ -ne "" }
+}
+
+if ($currentPaths -notcontains $installDir) {
+    $newPath = ($currentPaths + $installDir) -join ';'
+    [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
     Write-Host "[*] Added $installDir to User PATH."
 }
 

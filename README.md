@@ -97,9 +97,11 @@ mcp-switch <profile_name>       # Activate the specified profile (e.g., mcp-swit
 mcp-switch status               # Display active clients, profiles, and executable health
 mcp-switch list                 # Enumerate all configured profiles
 mcp-switch targets              # Select which AI clients participate in synchronization
-mcp-switch lang [en|tr|es|...]  # Set the interface language
+mcp-switch lang [en|tr]         # Set the interface language
 mcp-switch add                  # Register a new MCP server definition
 mcp-switch edit                 # Create or update profile assignments
+mcp-switch delete-profile <p>   # Remove an existing profile
+mcp-switch remove-server <s>    # Remove a server from the library and all profiles
 ```
 
 ## License
