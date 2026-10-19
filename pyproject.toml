@@ -25,6 +25,3 @@ mcp-switch = "mcp_switch:main"
 
 [tool.setuptools]
 py-modules = ["mcp_switch"]
-
-[tool.setuptools.packages.find]
-exclude = [".github*", "tests*"]

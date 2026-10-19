@@ -30,6 +30,10 @@ try {
     try {
         pipx install mcp-switch
     } catch {
-        pip install mcp-switch
+        try {
+            pip install mcp-switch
+        } catch {
+            pip install "git+https://github.com/YigitKw/MCP-Switcher.git"
+        }
     }
 }
