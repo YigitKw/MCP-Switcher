@@ -22,7 +22,7 @@ Active tool schemas consume context window capacity and increase inference laten
 - **Non-Destructive Merge:** Updates the `mcpServers` object while preserving custom editor shortcuts, themes, and application settings.
 - **Runtime and Daemon Health Checks:** Verifies executable availability in `PATH` and confirms that the Docker daemon responds before activation.
 - **Automatic Bootstrapping:** Discovers existing client configurations on first execution and initializes a default baseline profile.
-- **8 Built-in Locales:** English, Turkish, Spanish, Simplified Chinese, Russian, German, French, and Arabic.
+- **Bilingual Support:** English and Turkish.
 - **Zero External Dependencies:** Built entirely with the Python standard library.
 
 ---

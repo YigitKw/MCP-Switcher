@@ -146,9 +146,10 @@ def get_current_lang():
     return "en"
 
 def set_lang(lang_code):
-    if lang_code in TEXTS:
+    clean = lang_code.strip().lower()
+    if clean in TEXTS:
         try:
-            LANG_FILE.write_text(lang_code, encoding="utf-8")
+            LANG_FILE.write_text(clean, encoding="utf-8")
             return True
         except OSError:
             pass
@@ -405,6 +406,11 @@ def switch_profile(target_name):
             backup_file = BACKUPS_DIR / f"{target}_backup_{timestamp}.json"
             try:
                 shutil.copy2(client_file, backup_file)
+                if sys.platform != "win32":
+                    try:
+                        os.chmod(str(backup_file), 0o600)
+                    except OSError:
+                        pass
             except OSError as e:
                 print(f"{t('warn')} {target} backup failed: {e}", file=sys.stderr)
         ok, werr = merge_and_save_client_config(client_file, target_data)
@@ -527,12 +533,13 @@ def add_server_interactive():
         if not ok:
             print(f"{t('warn')} {res}")
             proceed = input(f"{t('cmd_warn_add')} ").strip().lower()
-            if proceed not in ("y", "e", "s", "ja", "oui"):
+            if proceed not in ("y", "e"):
                 return
         raw_args = input("Args (supports quotes for paths with spaces): ").strip()
         if raw_args:
             try:
-                args = shlex.split(raw_args, posix=(sys.platform != "win32"))
+                raw_tokens = shlex.split(raw_args, posix=(sys.platform != "win32"))
+                args = [tok[1:-1] if len(tok) >= 2 and tok[0] == tok[-1] and tok[0] in ('"', "'") else tok for tok in raw_tokens]
             except ValueError:
                 args = raw_args.split()
         else:
@@ -573,7 +580,9 @@ def add_server_interactive():
         raw_json = "\n".join(lines).strip()
         try:
             parsed = json.loads(raw_json)
-            server_data = parsed.get(server_name, parsed)
+            if isinstance(parsed, dict) and isinstance(parsed.get("mcpServers"), dict):
+                parsed = parsed["mcpServers"]
+            server_data = parsed.get(server_name, parsed) if isinstance(parsed, dict) else {}
         except json.JSONDecodeError as e:
             print(f"{t('err')} 2: Invalid JSON: {e}")
             return
@@ -590,7 +599,7 @@ def add_server_interactive():
         return
     print(f"\n{t('ok')} '{server_name}' added to library.")
     assign = input(f"{t('ask_assign')} ").strip().lower()
-    if assign in ("y", "e", "s", "ja", "oui"):
+    if assign in ("y", "e"):
         manage_profiles_interactive(preselect_server=server_name)
 
 def manage_profiles_interactive(preselect_server=None):
@@ -621,10 +630,12 @@ def manage_profiles_interactive(preselect_server=None):
         selected_servers = data.get("mcpServers", {}) if isinstance(data, dict) else {}
     else:
         return
+    if preselect_server and preselect_server in lib:
+        selected_servers[preselect_server] = lib[preselect_server]
     server_list = list(lib.keys())
     print(f"\n--- SELECT SERVERS FOR '{profile_name}' ---")
     for idx, s_name in enumerate(server_list, 1):
-        active = "[X]" if s_name in selected_servers or s_name == preselect_server else "[ ]"
+        active = "[X]" if s_name in selected_servers else "[ ]"
         s_cmd = lib[s_name].get("command", "")
         ok, res = check_command_installed(s_cmd)
         note = "" if ok else f" ({t('cmd_missing')})"
@@ -632,7 +643,7 @@ def manage_profiles_interactive(preselect_server=None):
     print(f"{t('prompt_select_servers')}:")
     selection = input("> ").strip().lower()
     if not selection:
-        if is_new:
+        if is_new and not selected_servers:
             print(f"{t('warn')} {t('aborted')}")
             return
         new_mcp = selected_servers
@@ -654,7 +665,7 @@ def manage_profiles_interactive(preselect_server=None):
         return
     print(f"\n{t('ok')} {t('saved')}: {profile_path}")
     activate = input(f"{t('ask_activate')} ").strip().lower()
-    if activate in ("y", "e", "s", "ja", "oui"):
+    if activate in ("y", "e"):
         switch_profile(profile_name)
 
 def delete_profile_interactive(name=None):
@@ -662,7 +673,7 @@ def delete_profile_interactive(name=None):
         profiles = sorted([p for p in PROFILES_DIR.glob("*.json") if p.name not in ("library.json", "active_targets.json")])
         if not profiles:
             print(f"\n{t('warn')} {t('none')}")
-            return
+            return EXIT_OK
         print(f"\n{t('delete_p_title')}")
         for idx, p in enumerate(profiles, 1):
             print(f"{idx}. {p.stem}")
@@ -671,17 +682,27 @@ def delete_profile_interactive(name=None):
             target_file = profiles[int(c) - 1]
         else:
             print(t("aborted"))
-            return
+            return EXIT_OK
     else:
         clean = sanitize_name(name)
+        if not clean:
+            print(f"{t('err')} 1: Invalid profile name.", file=sys.stderr)
+            return EXIT_NOT_FOUND
         target_file = PROFILES_DIR / f"{clean}.json"
         if not target_file.exists():
             print(f"{t('err')} 1: Profile '{name}' not found.", file=sys.stderr)
             return EXIT_NOT_FOUND
     confirm = input(f"'{target_file.stem}': {t('ask_confirm_delete')} ").strip().lower()
-    if confirm in ("y", "e", "s", "ja", "oui"):
+    if confirm in ("y", "e"):
+        is_active = (target_file.stem == get_current_profile_name())
         target_file.unlink(missing_ok=True)
         print(f"{t('ok')} {t('deleted')}: {target_file.stem}")
+        if is_active:
+            remaining = [p for p in PROFILES_DIR.glob("*.json") if p.name not in ("library.json", "active_targets.json")]
+            fallback = remaining[0].stem if remaining else "default"
+            CURRENT_PROFILE_FILE.write_text(fallback, encoding="utf-8")
+            if remaining:
+                switch_profile(fallback)
         return EXIT_OK
     print(t("aborted"))
     return EXIT_OK
@@ -690,7 +711,7 @@ def remove_server_interactive(name=None):
     lib = get_all_servers_from_library()
     if not lib:
         print(f"\n{t('warn')} {t('empty')}")
-        return
+        return EXIT_OK
     if not name:
         print(f"\n{t('remove_s_title')}")
         s_keys = list(lib.keys())
@@ -701,16 +722,18 @@ def remove_server_interactive(name=None):
             target_name = s_keys[int(c) - 1]
         else:
             print(t("aborted"))
-            return
+            return EXIT_OK
     else:
         target_name = name.strip()
         if target_name not in lib:
             print(f"{t('err')} 1: Server '{target_name}' not in library.", file=sys.stderr)
             return EXIT_NOT_FOUND
     confirm = input(f"'{target_name}': {t('ask_confirm_delete')} ").strip().lower()
-    if confirm in ("y", "e", "s", "ja", "oui"):
+    if confirm in ("y", "e"):
         del lib[target_name]
         write_json_file(LIBRARY_FILE, {"mcpServers": lib})
+        curr_p = get_current_profile_name()
+        active_modified = False
         for p in PROFILES_DIR.glob("*.json"):
             if p.name in ("library.json", "active_targets.json"):
                 continue
@@ -718,7 +741,11 @@ def remove_server_interactive(name=None):
             if isinstance(p_data, dict) and "mcpServers" in p_data and target_name in p_data["mcpServers"]:
                 del p_data["mcpServers"][target_name]
                 write_json_file(p, p_data)
+                if p.stem == curr_p:
+                    active_modified = True
         print(f"{t('ok')} {t('deleted')}: '{target_name}'")
+        if active_modified:
+            switch_profile(curr_p)
         return EXIT_OK
     print(t("aborted"))
     return EXIT_OK
@@ -817,9 +844,10 @@ def main():
         manage_targets_interactive()
         return EXIT_OK
     elif cmd in ("lang", "--lang"):
-        if len(sys.argv) >= 3 and sys.argv[2] in TEXTS:
-            set_lang(sys.argv[2])
-            print(f"{t('ok')} Language set to {sys.argv[2]}")
+        target_lang = sys.argv[2].lower() if len(sys.argv) >= 3 else ""
+        if target_lang in TEXTS:
+            set_lang(target_lang)
+            print(f"{t('ok')} Language set to {target_lang}")
         else:
             change_language_interactive()
         return EXIT_OK

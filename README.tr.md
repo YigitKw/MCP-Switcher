@@ -22,7 +22,7 @@ Aktif araç şemalarının tamamının bağlam penceresine (context window) dahi
 - **Korumalı Birleştirme (Non-Destructive Merge):** Yalnızca `mcpServers` alanını günceller; editörlerde tanımlı özel kısayolları, temaları ve sistem ayarlarını muhafaza eder.
 - **Çalışma Zamanı ve Servis Doğrulaması:** Komutların `PATH` üzerindeki varlığını denetler ve Docker tabanlı araçlar öncesinde Docker servisinin yanıt verebilirliğini teyit eder.
 - **Otomatik Başlangıç Yapılandırması (Auto-Bootstrap):** İlk çalıştırmada sistemde kurulu istemcilerin mevcut araçlarını tarar ve varsayılan bir temel profil (`default`) oluşturur.
-- **8 Yerleşik Dil:** İngilizce, Türkçe, İspanyolca, Çince, Rusça, Almanca, Fransızca ve Arapça.
+- **İki Dilli Destek:** İngilizce ve Türkçe.
 - **Sıfır Dış Bağımlılık:** Tamamen standart Python kütüphaneleri kullanılarak geliştirilmiştir.
 
 ---

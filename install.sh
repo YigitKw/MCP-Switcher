@@ -18,8 +18,8 @@ elif [ "$OS" = "linux" ]; then
             ASSET="mcp-switch-linux-arm64"
             ;;
         *)
-            echo "[WARN] Unsupported Linux architecture: $ARCH. Attempting fallback via pip..."
-            pip3 install --user mcp-switch || pipx install mcp-switch
+            echo "[WARN] Unsupported Linux architecture: $ARCH. Attempting fallback via pip/pipx..."
+            pipx install mcp-switch 2>/dev/null || pip3 install --user mcp-switch 2>/dev/null || pip3 install --user --break-system-packages mcp-switch
             exit 0
             ;;
     esac
@@ -40,7 +40,7 @@ if curl -fsSL "$URL" -o "$TARGET"; then
     echo "[OK] Installed successfully to ${TARGET}"
 else
     echo "[WARN] Prebuilt binary not available for ${ASSET}. Falling back to pip/pipx installation..."
-    pip3 install --user mcp-switch || pipx install mcp-switch
+    pipx install mcp-switch 2>/dev/null || pip3 install --user mcp-switch 2>/dev/null || pip3 install --user --break-system-packages mcp-switch
 fi
 
 case ":$PATH:" in
