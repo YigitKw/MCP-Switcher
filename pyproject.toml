@@ -12,7 +12,7 @@ license = {text = "MIT"}
 authors = [
     {name = "MCP Switcher Contributors"}
 ]
-keywords = ["mcp", "model-context-protocol", "claude", "cursor", "gemini", "opencode", "llm"]
+keywords = ["mcp", "model-context-protocol", "claude", "cursor", "windsurf", "gemini", "opencode", "codex", "llm"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",

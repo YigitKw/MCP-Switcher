@@ -12,6 +12,7 @@ from datetime import datetime
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
+VERSION = "1.0.0"
 BASE_DIR = Path(os.environ.get("MCP_SWITCH_HOME", Path.home()))
 CONFIG_DIR = BASE_DIR / ".gemini" / "config"
 PROFILES_DIR = CONFIG_DIR / "profiles"
@@ -52,23 +53,31 @@ TEXTS = {
         "edit_title": "--- EDIT / CREATE PROFILE ---",
         "delete_p_title": "--- DELETE PROFILE ---",
         "remove_s_title": "--- REMOVE SERVER FROM LIBRARY ---",
+        "rollback_title": "--- RESTORE BACKUP (ROLLBACK) ---",
         "targets_title": "--- CLIENT SYNC SETTINGS ---",
         "menu_title": "MCP SWITCHER",
         "menu_1": "1. Switch Profile",
         "menu_2": "2. Add New MCP Server",
         "menu_3": "3. Edit / Create Profile",
-        "menu_4": "4. Delete a Profile",
-        "menu_5": "5. Remove Server from Library",
-        "menu_6": "6. Manage Target Clients (Claude, Cursor, OpenCode, Codex, Gemini)",
-        "menu_7": "7. View Status and Health Check",
-        "menu_8": "8. List All Servers in Library",
-        "menu_9": "9. Change Language",
-        "menu_10": "10. Exit",
+        "menu_4": "4. Clone Existing Profile",
+        "menu_5": "5. Quick Enable Server in Active Profile",
+        "menu_6": "6. Quick Disable Server in Active Profile",
+        "menu_7": "7. Delete a Profile",
+        "menu_8": "8. Remove Server from Library",
+        "menu_9": "9. Rollback to Previous Backup",
+        "menu_10": "10. Export Profile (Safe / Clean)",
+        "menu_11": "11. Manage Target Clients (Claude, Cursor, Windsurf, OpenCode, Codex, Gemini)",
+        "menu_12": "12. View Status and Health Check",
+        "menu_13": "13. List All Servers in Library",
+        "menu_14": "14. Change Language",
+        "menu_15": "15. Exit",
         "choice": "Your choice",
         "prompt_profile_name": "Target profile number or name",
         "prompt_select_servers": "Enter server numbers comma-separated (e.g. 1,3), 'all', or press Enter to keep current",
         "saved": "Saved successfully",
         "deleted": "Deleted successfully",
+        "restored": "Restored successfully",
+        "cloned": "Cloned successfully",
         "aborted": "Operation cancelled",
         "ask_activate": "Do you want to activate this profile now? (y/n)",
         "ask_assign": "Do you want to assign this server to a profile now? (y/n)",
@@ -78,6 +87,7 @@ TEXTS = {
         "non_interactive_help": "Non-interactive mode detected. Use 'mcp-switch --help' for usage.",
         "paste_json_prompt": "Paste JSON configuration (press Enter on empty line or EOF to finish):",
         "cannot_merge_corrupt": "Cannot merge configuration: existing client file contains invalid JSON. Overwrite aborted to prevent data loss.",
+        "no_backups_found": "No backup files available to restore.",
     },
     "tr": {
         "ok": "[OK]",
@@ -103,23 +113,31 @@ TEXTS = {
         "edit_title": "--- PROFIL DUZENLE / OLUSTUR ---",
         "delete_p_title": "--- PROFIL SIL ---",
         "remove_s_title": "--- KUTUPHANEDEN SUNUCU SIL ---",
+        "rollback_title": "--- YEDEKTEN GERI YUKLE (ROLLBACK) ---",
         "targets_title": "--- ISTEMCI SENKRONIZASYON AYARLARI ---",
         "menu_title": "MCP SWITCHER",
         "menu_1": "1. Profil Degistir",
         "menu_2": "2. Yeni MCP Sunucusu Ekle",
         "menu_3": "3. Profil Duzenle / Olustur",
-        "menu_4": "4. Profil Sil",
-        "menu_5": "5. Kutuphaneden Sunucu Sil",
-        "menu_6": "6. Hedef Istemcileri Yonet (Claude, Cursor, OpenCode, Codex, Gemini)",
-        "menu_7": "7. Durum ve Saglik Raporu",
-        "menu_8": "8. Tum Sunucu Kutuphanesini Listele",
-        "menu_9": "9. Dil Degistir",
-        "menu_10": "10. Cikis",
+        "menu_4": "4. Mevcut Profili Klonla",
+        "menu_5": "5. Aktif Profile Hizli Sunucu Ekle (Enable)",
+        "menu_6": "6. Aktif Profilde Sunucuyu Kapat (Disable)",
+        "menu_7": "7. Profil Sil",
+        "menu_8": "8. Kutuphaneden Sunucu Sil",
+        "menu_9": "9. Yedekten Geri Yukle (Rollback)",
+        "menu_10": "10. Profili Disa Aktar (Export / Guvenli)",
+        "menu_11": "11. Hedef Istemcileri Yonet (Claude, Cursor, Windsurf, OpenCode, Codex, Gemini)",
+        "menu_12": "12. Durum ve Saglik Raporu",
+        "menu_13": "13. Tum Sunucu Kutuphanesini Listele",
+        "menu_14": "14. Dil Degistir",
+        "menu_15": "15. Cikis",
         "choice": "Seciminiz",
         "prompt_profile_name": "Gecmek istediginiz profil numarasi veya adi",
         "prompt_select_servers": "Aktif olmasini istediginiz numaralari virgul ile girin (orn: 1,3), 'all' yazin veya korumak icin Enter'a basin",
         "saved": "Basariyla kaydedildi",
         "deleted": "Basariyla silindi",
+        "restored": "Basariyla geri yuklendi",
+        "cloned": "Basariyla klonlandi",
         "aborted": "Islem iptal edildi",
         "ask_activate": "Bu profili simdi aktif etmek ister misiniz? (e/h)",
         "ask_assign": "Bu sunucuyu bir profile simdi eklemek ister misiniz? (e/h)",
@@ -129,6 +147,7 @@ TEXTS = {
         "non_interactive_help": "Etkilesimsiz ortam algilandi. Kullanim icin 'mcp-switch --help'.",
         "paste_json_prompt": "JSON yapilandirmasini yapistirin (bitirmek icin bos satirda Enter'a basin):",
         "cannot_merge_corrupt": "Birlestirme yapilamadi: istemci dosyasi bozuk JSON iceriyor. Veri kaybi olmamasi icin islem durduruldu.",
+        "no_backups_found": "Geri yuklenecek yedek dosyasi bulunamadi.",
     }
 }
 
@@ -212,6 +231,7 @@ def get_client_registry():
         "gemini": home / ".gemini" / "config" / "mcp_config.json",
         "claude": claude_path,
         "cursor": home / ".cursor" / "mcp.json",
+        "windsurf": home / ".codeium" / "windsurf" / "mcp_config.json",
         "opencode": home / ".opencode" / "mcp.json",
         "codex": home / ".codex" / "mcp.json",
     }
@@ -668,6 +688,134 @@ def manage_profiles_interactive(preselect_server=None):
     if activate in ("y", "e"):
         switch_profile(profile_name)
 
+def clone_profile(source_name, target_name):
+    clean_src = sanitize_name(source_name)
+    clean_dst = sanitize_name(target_name)
+    if not clean_src or not clean_dst:
+        print(f"{t('err')} 1: Invalid profile name.", file=sys.stderr)
+        return EXIT_NOT_FOUND
+    src_file = PROFILES_DIR / f"{clean_src}.json"
+    dst_file = PROFILES_DIR / f"{clean_dst}.json"
+    if not src_file.exists():
+        print(f"{t('err')} 1: Source profile '{source_name}' not found.", file=sys.stderr)
+        return EXIT_NOT_FOUND
+    data, err = read_json_file(src_file)
+    if err:
+        print(f"{t('err')} 2: Corrupted source profile: {err}", file=sys.stderr)
+        return EXIT_INVALID_DATA
+    ok, werr = write_json_file(dst_file, data)
+    if not ok:
+        print(f"{t('err')} 3: Failed to clone profile: {werr}", file=sys.stderr)
+        return EXIT_IO_ERROR
+    print(f"{t('ok')} {t('cloned')}: '{clean_src}' -> '{clean_dst}'")
+    return EXIT_OK
+
+def enable_server_in_active_profile(server_name):
+    lib = get_all_servers_from_library()
+    clean_s = server_name.strip()
+    if clean_s not in lib:
+        print(f"{t('err')} 1: Server '{server_name}' not found in library.", file=sys.stderr)
+        return EXIT_NOT_FOUND
+    curr_name = get_current_profile_name()
+    curr_file = PROFILES_DIR / f"{curr_name}.json"
+    data, err = read_json_file(curr_file)
+    if not isinstance(data, dict):
+        data = {"mcpServers": {}}
+    if "mcpServers" not in data or not isinstance(data["mcpServers"], dict):
+        data["mcpServers"] = {}
+    data["mcpServers"][clean_s] = lib[clean_s]
+    write_json_file(curr_file, data)
+    print(f"{t('ok')} Enabled '{clean_s}' in active profile '{curr_name}'.")
+    return switch_profile(curr_name)
+
+def disable_server_in_active_profile(server_name):
+    curr_name = get_current_profile_name()
+    curr_file = PROFILES_DIR / f"{curr_name}.json"
+    data, err = read_json_file(curr_file)
+    if not isinstance(data, dict) or "mcpServers" not in data or not isinstance(data["mcpServers"], dict):
+        print(f"{t('warn')} Server '{server_name}' not active.")
+        return EXIT_OK
+    clean_s = server_name.strip()
+    if clean_s in data["mcpServers"]:
+        del data["mcpServers"][clean_s]
+        write_json_file(curr_file, data)
+        print(f"{t('ok')} Disabled '{clean_s}' in active profile '{curr_name}'.")
+        return switch_profile(curr_name)
+    print(f"{t('warn')} Server '{server_name}' was not active in '{curr_name}'.")
+    return EXIT_OK
+
+def export_profile(profile_name, safe=False):
+    clean_name = sanitize_name(profile_name)
+    if not clean_name:
+        print(f"{t('err')} 1: Invalid profile name.", file=sys.stderr)
+        return EXIT_NOT_FOUND
+    p_file = PROFILES_DIR / f"{clean_name}.json"
+    if not p_file.exists():
+        print(f"{t('err')} 1: Profile '{profile_name}' not found.", file=sys.stderr)
+        return EXIT_NOT_FOUND
+    data, err = read_json_file(p_file)
+    if err or not isinstance(data, dict):
+        print(f"{t('err')} 2: Invalid profile data: {err}", file=sys.stderr)
+        return EXIT_INVALID_DATA
+    export_data = dict(data)
+    if safe and "mcpServers" in export_data and isinstance(export_data["mcpServers"], dict):
+        safe_servers = {}
+        for s_name, s_spec in export_data["mcpServers"].items():
+            if isinstance(s_spec, dict):
+                spec_copy = dict(s_spec)
+                if "env" in spec_copy and isinstance(spec_copy["env"], dict):
+                    spec_copy["env"] = {k: "<REDACTED>" for k in spec_copy["env"]}
+                safe_servers[s_name] = spec_copy
+        export_data["mcpServers"] = safe_servers
+    print(json.dumps(export_data, indent=2, ensure_ascii=False))
+    return EXIT_OK
+
+def rollback_backup(selected_ts=None):
+    backups = sorted(BACKUPS_DIR.glob("*_backup_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
+    if not backups:
+        print(f"{t('warn')} {t('no_backups_found')}")
+        return EXIT_NOT_FOUND
+    reg = get_client_registry()
+    groups = {}
+    for b in backups:
+        parts = b.stem.split("_backup_")
+        if len(parts) == 2:
+            client, ts = parts[0], parts[1]
+            if ts not in groups:
+                groups[ts] = {}
+            groups[ts][client] = b
+    timestamps = sorted(groups.keys(), reverse=True)
+    if not selected_ts:
+        print(f"\n{t('rollback_title')}")
+        for idx, ts in enumerate(timestamps, 1):
+            cl_list = ", ".join(groups[ts].keys())
+            print(f"{idx}. {ts} ({cl_list})")
+        c = input(f"{t('choice')} (1-{len(timestamps)}): ").strip()
+        if c.isdigit() and 1 <= int(c) <= len(timestamps):
+            target_ts = timestamps[int(c) - 1]
+        else:
+            print(t("aborted"))
+            return EXIT_OK
+    else:
+        target_ts = selected_ts.strip()
+        if target_ts not in groups:
+            print(f"{t('err')} 1: Backup timestamp '{selected_ts}' not found.", file=sys.stderr)
+            return EXIT_NOT_FOUND
+    restored_any = False
+    for client_name, b_file in groups[target_ts].items():
+        dst = reg.get(client_name)
+        if dst:
+            try:
+                shutil.copy2(b_file, dst)
+                print(f"  {t('sync')} {client_name:<10} <- {b_file.name}")
+                restored_any = True
+            except OSError as e:
+                print(f"{t('warn')} Failed to restore {client_name}: {e}", file=sys.stderr)
+    if restored_any:
+        print(f"\n{t('ok')} {t('restored')}: {target_ts}")
+        return EXIT_OK
+    return EXIT_IO_ERROR
+
 def delete_profile_interactive(name=None):
     if not name:
         profiles = sorted([p for p in PROFILES_DIR.glob("*.json") if p.name not in ("library.json", "active_targets.json")])
@@ -784,8 +932,13 @@ def interactive_menu():
         print(t("menu_8"))
         print(t("menu_9"))
         print(t("menu_10"))
+        print(t("menu_11"))
+        print(t("menu_12"))
+        print(t("menu_13"))
+        print(t("menu_14"))
+        print(t("menu_15"))
         try:
-            choice = input(f"\n{t('choice')} (1-10): ").strip()
+            choice = input(f"\n{t('choice')} (1-15): ").strip()
         except (EOFError, KeyboardInterrupt):
             print(f"\n{t('non_interactive_help')}")
             return
@@ -806,14 +959,30 @@ def interactive_menu():
         elif choice == "3":
             manage_profiles_interactive()
         elif choice == "4":
-            delete_profile_interactive()
+            src = input("Source profile: ").strip()
+            dst = input("New profile name: ").strip()
+            clone_profile(src, dst)
         elif choice == "5":
-            remove_server_interactive()
+            srv = input("Server to enable: ").strip()
+            enable_server_in_active_profile(srv)
         elif choice == "6":
-            manage_targets_interactive()
+            srv = input("Server to disable: ").strip()
+            disable_server_in_active_profile(srv)
         elif choice == "7":
-            show_status()
+            delete_profile_interactive()
         elif choice == "8":
+            remove_server_interactive()
+        elif choice == "9":
+            rollback_backup()
+        elif choice == "10":
+            p = input("Profile to export: ").strip()
+            safe_c = input("Mask API tokens? (y/n): ").strip().lower()
+            export_profile(p, safe=(safe_c in ("y", "e")))
+        elif choice == "11":
+            manage_targets_interactive()
+        elif choice == "12":
+            show_status()
+        elif choice == "13":
             lib = get_all_servers_from_library()
             print(f"\n{t('lib_title')}")
             for k, v in lib.items():
@@ -824,9 +993,9 @@ def interactive_menu():
             if not lib:
                 print(t("empty"))
             print()
-        elif choice == "9":
+        elif choice == "14":
             change_language_interactive()
-        elif choice in ("10", "q", "exit"):
+        elif choice in ("15", "q", "exit"):
             break
 
 def main():
@@ -835,7 +1004,10 @@ def main():
         interactive_menu()
         return EXIT_OK
     cmd = sys.argv[1].lower()
-    if cmd in ("list", "-l", "--list"):
+    if cmd in ("version", "-v", "--version"):
+        print(f"mcp-switch {VERSION}")
+        return EXIT_OK
+    elif cmd in ("list", "-l", "--list"):
         list_profiles()
         return EXIT_OK
     elif cmd in ("status", "-s", "--status"):
@@ -857,6 +1029,31 @@ def main():
     elif cmd in ("edit", "-e", "--edit"):
         manage_profiles_interactive()
         return EXIT_OK
+    elif cmd in ("clone", "copy-profile"):
+        if len(sys.argv) >= 4:
+            return clone_profile(sys.argv[2], sys.argv[3])
+        print("Usage: mcp-switch clone <source> <target>")
+        return EXIT_NOT_FOUND
+    elif cmd in ("enable", "use"):
+        if len(sys.argv) >= 3:
+            return enable_server_in_active_profile(sys.argv[2])
+        print("Usage: mcp-switch enable <server_name>")
+        return EXIT_NOT_FOUND
+    elif cmd in ("disable", "unuse"):
+        if len(sys.argv) >= 3:
+            return disable_server_in_active_profile(sys.argv[2])
+        print("Usage: mcp-switch disable <server_name>")
+        return EXIT_NOT_FOUND
+    elif cmd in ("export", "--export"):
+        if len(sys.argv) >= 3:
+            is_safe = ("--safe" in sys.argv or "-s" in sys.argv)
+            return export_profile(sys.argv[2], safe=is_safe)
+        print("Usage: mcp-switch export <profile_name> [--safe]")
+        return EXIT_NOT_FOUND
+    elif cmd in ("rollback", "restore"):
+        if len(sys.argv) >= 3:
+            return rollback_backup(sys.argv[2])
+        return rollback_backup()
     elif cmd in ("delete-profile", "remove-profile"):
         if len(sys.argv) >= 3:
             return delete_profile_interactive(sys.argv[2])
@@ -868,6 +1065,7 @@ def main():
     elif cmd in ("help", "-h", "--help"):
         print("Usage:")
         print("  mcp-switch                     : Interactive menu")
+        print("  mcp-switch --version           : Show version")
         print("  mcp-switch <profile>           : Switch to specified profile")
         print("  mcp-switch list                : List profiles")
         print("  mcp-switch status              : Show active status & health check")
@@ -875,6 +1073,11 @@ def main():
         print("  mcp-switch lang [en|tr]        : Set language")
         print("  mcp-switch add                 : Add new server")
         print("  mcp-switch edit                : Edit/create profile")
+        print("  mcp-switch clone <src> <dst>   : Clone a profile")
+        print("  mcp-switch enable <server>     : Quick enable server in active profile")
+        print("  mcp-switch disable <server>    : Quick disable server in active profile")
+        print("  mcp-switch export <p> [--safe] : Export profile JSON (safe masks tokens)")
+        print("  mcp-switch rollback [ts]       : Restore client configs from backup")
         print("  mcp-switch delete-profile <p>  : Delete a profile")
         print("  mcp-switch remove-server <s>   : Remove server from library and profiles")
         return EXIT_OK

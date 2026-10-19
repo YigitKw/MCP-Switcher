@@ -146,6 +146,79 @@ def test_isolated_lang_case_insensitive(sandbox):
     lang_file = Path(sandbox) / ".gemini" / "config" / "lang.txt"
     assert lang_file.read_text(encoding="utf-8").strip() == "tr"
 
+def test_isolated_version_flag(sandbox):
+    code, out, err = run_isolated_cli(sandbox, "--version")
+    assert code == 0, f"Expected 0, got {code}"
+    assert "mcp-switch 1.0.0" in out
+    code_short, out_short, err_short = run_isolated_cli(sandbox, "-v")
+    assert code_short == 0
+    assert "mcp-switch 1.0.0" in out_short
+
+def test_isolated_clone_profile(sandbox):
+    profiles_dir = Path(sandbox) / ".gemini" / "config" / "profiles"
+    profiles_dir.mkdir(parents=True, exist_ok=True)
+    orig_p = profiles_dir / "base.json"
+    orig_p.write_text(json.dumps({"mcpServers": {"srv1": {"command": "node"}}}), encoding="utf-8")
+    code, out, err = run_isolated_cli(sandbox, "clone", "base", "cloned_base")
+    assert code == 0, f"Clone failed: {err}"
+    clone_file = profiles_dir / "cloned_base.json"
+    assert clone_file.exists(), "Cloned file was not created"
+    data = json.loads(clone_file.read_text(encoding="utf-8"))
+    assert "srv1" in data["mcpServers"]
+
+def test_isolated_quick_enable_disable(sandbox):
+    config_dir = Path(sandbox) / ".gemini" / "config"
+    profiles_dir = config_dir / "profiles"
+    profiles_dir.mkdir(parents=True, exist_ok=True)
+    lib_file = profiles_dir / "library.json"
+    lib_file.write_text(json.dumps({
+        "mcpServers": {
+            "tool_a": {"command": sys.executable, "args": ["-V"]},
+            "tool_b": {"command": sys.executable, "args": ["-V"]}
+        }
+    }), encoding="utf-8")
+    curr_p = profiles_dir / "current.json"
+    curr_p.write_text(json.dumps({"mcpServers": {"tool_a": {"command": sys.executable, "args": ["-V"]}}}), encoding="utf-8")
+    (config_dir / "current_profile.txt").write_text("current", encoding="utf-8")
+    code_en, out_en, err_en = run_isolated_cli(sandbox, "enable", "tool_b")
+    assert code_en == 0, f"Enable failed: {err_en}"
+    curr_data = json.loads(curr_p.read_text(encoding="utf-8"))
+    assert "tool_b" in curr_data["mcpServers"], "tool_b was not enabled"
+    code_dis, out_dis, err_dis = run_isolated_cli(sandbox, "disable", "tool_a")
+    assert code_dis == 0, f"Disable failed: {err_dis}"
+    curr_data_after = json.loads(curr_p.read_text(encoding="utf-8"))
+    assert "tool_a" not in curr_data_after["mcpServers"], "tool_a was not disabled"
+
+def test_isolated_safe_export(sandbox):
+    profiles_dir = Path(sandbox) / ".gemini" / "config" / "profiles"
+    profiles_dir.mkdir(parents=True, exist_ok=True)
+    p_file = profiles_dir / "secret_profile.json"
+    p_file.write_text(json.dumps({
+        "mcpServers": {
+            "github": {
+                "command": "node",
+                "env": {"GITHUB_TOKEN": "ghp_super_secret_12345"}
+            }
+        }
+    }), encoding="utf-8")
+    code, out, err = run_isolated_cli(sandbox, "export", "secret_profile", "--safe")
+    assert code == 0, f"Export failed: {err}"
+    assert "<REDACTED>" in out
+    assert "ghp_super_secret_12345" not in out
+
+def test_isolated_rollback(sandbox):
+    config_dir = Path(sandbox) / ".gemini" / "config"
+    backups_dir = config_dir / "profiles" / "backups"
+    backups_dir.mkdir(parents=True, exist_ok=True)
+    gemini_cfg = config_dir / "mcp_config.json"
+    gemini_cfg.write_text(json.dumps({"version": "current"}), encoding="utf-8")
+    b_file = backups_dir / "gemini_backup_20261019_120000.json"
+    b_file.write_text(json.dumps({"version": "old_backup"}), encoding="utf-8")
+    code, out, err = run_isolated_cli(sandbox, "rollback", "20261019_120000")
+    assert code == 0, f"Rollback failed: {err}"
+    restored_data = json.loads(gemini_cfg.read_text(encoding="utf-8"))
+    assert restored_data.get("version") == "old_backup"
+
 def run_all_tests():
     with tempfile.TemporaryDirectory() as temp_root:
         tests = [
@@ -159,6 +232,11 @@ def run_all_tests():
             ("Isolated Shlex space handling test", test_isolated_shlex_spaces_and_quotes),
             ("Isolated Nested mcpServers paste test", test_isolated_nested_mcpservers_paste),
             ("Isolated Lang case-insensitive test", test_isolated_lang_case_insensitive),
+            ("Isolated Version flag test", test_isolated_version_flag),
+            ("Isolated Clone profile test", test_isolated_clone_profile),
+            ("Isolated Quick enable/disable test", test_isolated_quick_enable_disable),
+            ("Isolated Safe export test", test_isolated_safe_export),
+            ("Isolated Rollback test", test_isolated_rollback),
         ]
         passed = 0
         failed = 0
